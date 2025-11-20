@@ -49,7 +49,10 @@ if uploaded_file:
     # -----------------------------
     # Create Embeddings & Vector DB
     # -----------------------------
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+    embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-large",
+    api_key=os.getenv("OPENAI_API_KEY")
+    )
 
     vectordb = Chroma.from_texts(
         chunks,
