@@ -1,6 +1,6 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from openai import OpenAI
+import openai
 from dotenv import load_dotenv
 import os
 
@@ -8,7 +8,7 @@ import os
 load_dotenv()
 
 # Initialize OpenAI client (auto picks key from env)
-client = OpenAI()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # LangChain imports (correct for LangChain 1.x)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -86,7 +86,7 @@ Answer:
 """
 
         # Step 3: Call OpenAI LLM
-        response = client.chat.completions.create(
+        response = openai.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "user", "content": prompt}]
         )
