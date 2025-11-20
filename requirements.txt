@@ -4,11 +4,9 @@ python-dotenv==1.0.1
 
 openai==1.40.0
 
-# LangChain compatible
-langchain==1.0.8
-langchain-community==0.0.32
-langchain-openai==0.1.6
-langchain-text-splitters==0.0.2
+langchain==0.1.20
+langchain-community==0.0.27
+langchain-openai==0.0.8
 
 chromadb==0.5.3
 tiktoken==0.7.0
