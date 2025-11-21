@@ -1,2 +1,15 @@
 .env
 *.env
+
+# Python virtual environment
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Streamlit stuff
+.streamlit/
+
+# OS files
+.DS_Store
+Thumbs.db

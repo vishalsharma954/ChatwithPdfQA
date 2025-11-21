@@ -1,71 +1,81 @@
 import streamlit as st
-import fitz
-import os
+from PyPDF2 import PdfReader
 from dotenv import load_dotenv
-from openai import OpenAI
-import tiktoken
-import chromadb
-from chromadb.utils import embedding_functions
+import os
 
-# Load API key
+# Load environment variables
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Create Chroma client (in-memory, deployment safe)
-chroma_client = chromadb.Client()
+# Import OpenAI client (works perfectly with openai==1.26.0)
+from openai import OpenAI
 
-st.title("📘 PDF RAG App (OpenAI + Chroma, No LangChain)")
+client = OpenAI()  # auto-picks API key from environment
+
+# LangChain imports (stable versions)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+
+
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.title("📘 PDF RAG App (LangChain + OpenAI + Chroma)")
 
 uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
 
-def chunk_text(text, chunk_size=1000, overlap=150):
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += chunk_size - overlap
-    return chunks
-
 if uploaded_file:
 
-    # Extract text using PyMuPDF (best on cloud)
-    doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    # -----------------------------
+    # Extract PDF Text
+    # -----------------------------
+    pdf_reader = PdfReader(uploaded_file)
     raw_text = ""
-    for page in doc:
-        raw_text += page.get_text()
+
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        if text:
+            raw_text += text + "\n"
 
     st.success("PDF Loaded Successfully!")
 
-    # Chunk text manually
-    chunks = chunk_text(raw_text)
+    # -----------------------------
+    # Split into Chunks
+    # -----------------------------
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=150
+    )
+
+    chunks = splitter.split_text(raw_text)
     st.write(f"📑 Total Chunks: {len(chunks)}")
 
-    # Create embedding function
-    embed_fn = embedding_functions.OpenAIEmbeddingFunction(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        model_name="text-embedding-3-large"
+    # -----------------------------
+    # Create Embeddings & Vector DB
+    # -----------------------------
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-large"
     )
 
-    # Create a Chroma collection
-    collection = chromadb.Client().create_collection(
-        name="pdf_rag",
-        embedding_function=embed_fn
+    vectordb = Chroma.from_texts(
+        chunks,
+        embedding=embeddings,
+        collection_name="pdf_rag_store"
     )
 
-    # Insert chunks
-    ids = [f"chunk_{i}" for i in range(len(chunks))]
-    collection.add(documents=chunks, ids=ids)
+    retriever = vectordb.as_retriever(search_kwargs={"k": 4})
 
+    # -----------------------------
+    # Ask Question
+    # -----------------------------
     query = st.text_input("Ask a question from this PDF")
 
     if query:
-        # Retrieve top 4 matching chunks
-        results = collection.query(query_texts=[query], n_results=4)
-        retrieved_chunks = results["documents"][0]
-        context = "\n\n".join(retrieved_chunks)
+        # Retrieve relevant chunks
+        docs = retriever.invoke(query)
+        context = "\n\n".join([doc.page_content for doc in docs])
 
+        # Create prompt
         prompt = f"""
 Use the following PDF content to answer the question.
 If the answer is not in the document, say:
@@ -80,9 +90,12 @@ Question:
 Answer:
 """
 
+        # Call OpenAI LLM
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
 
         answer = response.choices[0].message.content
